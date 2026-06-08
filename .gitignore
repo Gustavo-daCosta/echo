@@ -1,0 +1,9 @@
+# Enviroment variables related files
+.env
+
+# Javascript/Typescript related files and folders
+
+
+# Python enviroment related files and folders
+.venv/
+
