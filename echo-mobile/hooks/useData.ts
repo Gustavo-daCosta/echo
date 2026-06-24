@@ -73,7 +73,6 @@ export function useTopItems<T>(
   return { items, loading };
 }
 
-// ── Audio features ─────────────────────────────────────────────
 
 export function useAudioFeatures(trackIds: string[]) {
   const [features, setFeatures] = useState<SpotifyAudioFeatures[]>([]);

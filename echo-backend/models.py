@@ -1,12 +1,6 @@
-"""
-Pydantic models for request/response schemas.
-"""
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
 
-
-# ── Request ─────────────────────────────────────────────────────
 
 class ConcertRequest(BaseModel):
     latitude: float = Field(..., ge=-90, le=90)
@@ -17,12 +11,10 @@ class ConcertRequest(BaseModel):
     radius_km: int = Field(default=30, ge=1, le=500)
 
 
-# ── Response ────────────────────────────────────────────────────
-
 class ConcertEvent(BaseModel):
     id: str
     name: str
-    date: str  # ISO 8601
+    date: str
     venue: str
     city: str
     country: str
@@ -39,7 +31,6 @@ class ConcertResponse(BaseModel):
     searched_artists: int
 
 
-# ── Health ───────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):
     status: str = "ok"

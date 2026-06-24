@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from routers import router
 from config import get_settings
 
-# ── Logging ─────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -26,7 +25,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# ── CORS — allow mobile app connections ─────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,11 +33,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routes ──────────────────────────────────────────────────────
 app.include_router(router)
 
 
-# ── Startup ─────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup():
     logger.info("Echo Backend starting on %s:%d", settings.host, settings.port)

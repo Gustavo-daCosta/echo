@@ -1,9 +1,21 @@
-import { Stack, Redirect } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { View, ActivityIndicator } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { Accent } from '@/constants/theme';
 import styles from '@/styles/root-layout';
+
+// Show notifications even when app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 function RootNavigator() {
   const { isAuth, isLoading } = useAuth();
@@ -18,11 +30,9 @@ function RootNavigator() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {isAuth ? (
-        <Stack.Screen name="(tabs)" />
-      ) : (
-        <Stack.Screen name="auth/login" />
-      )}
+      <Stack.Screen name="auth/callback" />
+      <Stack.Screen name="auth/login" redirect={isAuth} />
+      <Stack.Screen name="(tabs)" redirect={!isAuth} />
     </Stack>
   );
 }

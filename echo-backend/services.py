@@ -92,7 +92,6 @@ async def search_concerts(
             start = dates.get("start", {})
             event_date = start.get("dateTime") or start.get("localDate", "")
 
-            # Extract genre info for logging
             classifications = event.get("classifications", [])
             genre = classifications[0].get("genre", {}).get("name", "") if classifications else ""
 

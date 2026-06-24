@@ -1,4 +1,3 @@
-import { Redirect } from 'expo-router';
 import {
   createMaterialTopTabNavigator,
 } from '@react-navigation/material-top-tabs';
@@ -16,7 +15,8 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
 
   if (isLoading) return null;
-  if (!isAuth) return <Redirect href="/auth/login" />;
+
+  // Auth redirect handled by root layout _layout.tsx
 
   return (
     <TopTabs

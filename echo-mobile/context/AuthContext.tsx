@@ -1,3 +1,7 @@
+/**
+ * Auth context — manages Spotify authentication state across the app.
+ * In dev builds, the callback screen handles token exchange.
+ */
 import {
   createContext,
   useContext,
@@ -7,8 +11,8 @@ import {
   type ReactNode,
 } from 'react';
 import * as WebBrowser from 'expo-web-browser';
+import * as SecureStore from 'expo-secure-store';
 import {
-  exchangeCodeAsync,
   makeRedirectUri,
   useAuthRequest,
   ResponseType,
@@ -45,6 +49,7 @@ interface AuthContextType {
   promptAsync: () => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<boolean>;
+  onTokensSaved: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -53,6 +58,7 @@ const AuthContext = createContext<AuthContextType>({
   promptAsync: async () => {},
   logout: async () => {},
   refreshAuth: async () => false,
+  onTokensSaved: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -61,16 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const redirectUri = makeRedirectUri({
     scheme: 'echo',
+    path: 'auth/callback',
   });
 
-  const discoveryWithLogging = {
-    ...discovery,
-  };
-
   console.log('[Auth] redirectUri:', redirectUri);
-  console.log('[Auth] clientId set:', SPOTIFY_CLIENT_ID ? 'yes' : 'NO — check .env');
 
-  const [request, response, promptAsync] = useAuthRequest(
+  const [request, , promptAsync] = useAuthRequest(
     {
       clientId: SPOTIFY_CLIENT_ID,
       scopes: SCOPES,
@@ -78,53 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       redirectUri,
       usePKCE: true,
     },
-    discoveryWithLogging,
+    discovery,
   );
 
-  useEffect(() => {
-    console.log('[Auth] response type:', response?.type);
-    if (response?.type === 'success') {
-      const { code } = response.params;
-      console.log('[Auth] got code, exchanging for token...');
-
-      (async () => {
-        try {
-          if (!request?.codeVerifier) {
-            console.error('[Auth] no code verifier!');
-            return;
-          }
-
-          const tokenResult = await exchangeCodeAsync(
-            {
-              clientId: SPOTIFY_CLIENT_ID,
-              code,
-              redirectUri,
-              extraParams: { code_verifier: request.codeVerifier },
-            },
-            discovery,
-          );
-
-          console.log('[Auth] token received, saving...');
-          await saveTokens(
-            tokenResult.accessToken,
-            tokenResult.refreshToken ?? '',
-            tokenResult.expiresIn ?? 3600,
-          );
-
-          console.log('[Auth] token saved, setting isAuth=true');
-          setIsAuth(true);
-        } catch (err) {
-          console.error('[Auth] token exchange failed:', err);
-        }
-      })();
-    } else if (response?.type === 'error') {
-      console.error('[Auth] response error:', response.params);
-    }
-  }, [response]);
-
+  // Check existing auth on mount — tokens were saved by callback screen
   useEffect(() => {
     (async () => {
-      console.log('[Auth] checking existing auth...');
       const auth = await isAuthenticated();
       console.log('[Auth] existing auth:', auth);
       setIsAuth(auth);
@@ -133,45 +94,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleLogin = useCallback(async () => {
-    if (!request) {
-      console.error('[Auth] no request object — client ID may be missing');
+    if (!request?.codeVerifier) {
+      console.error('[Auth] request not ready');
       return;
     }
 
-    console.log('[Auth] launching Spotify OAuth...');
-    const result = await promptAsync();
-    console.log('[Auth] promptAsync result type:', result?.type);
+    // Store PKCE params so the callback screen can exchange the code
+    await SecureStore.setItemAsync('pkce_code_verifier', request.codeVerifier);
+    await SecureStore.setItemAsync('pkce_redirect_uri', redirectUri);
 
-    if (result?.type !== 'success') {
-      console.log('[Auth] user cancelled or error:', result?.type);
-      return;
-    }
-
-    try {
-      const codeVerifier = request.codeVerifier;
-      if (!codeVerifier) throw new Error('No code verifier');
-
-      const tokenResult = await exchangeCodeAsync(
-        {
-          clientId: SPOTIFY_CLIENT_ID,
-          code: result.params.code,
-          redirectUri,
-          extraParams: { code_verifier: codeVerifier },
-        },
-        discovery,
-      );
-
-      await saveTokens(
-        tokenResult.accessToken,
-        tokenResult.refreshToken ?? '',
-        tokenResult.expiresIn ?? 3600,
-      );
-
-      console.log('[Auth] handleLogin: token saved, auth=true');
-      setIsAuth(true);
-    } catch (err) {
-      console.error('[Auth] handleLogin exchange failed:', err);
-    }
+    console.log('[Auth] opening Spotify OAuth...');
+    await promptAsync();
+    // Don't try to exchange here — the callback screen handles it
   }, [request, promptAsync, redirectUri]);
 
   const refreshAuth = useCallback(async (): Promise<boolean> => {
@@ -207,6 +141,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const onTokensSaved = useCallback(() => {
+    console.log('[Auth] onTokensSaved — setting isAuth=true');
+    setIsAuth(true);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       const token = await getAccessToken();
@@ -225,8 +164,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuth(false);
   }, []);
 
-  console.log('[Auth] render state — isAuth:', isAuth, 'isLoading:', isLoading);
-
   return (
     <AuthContext.Provider
       value={{
@@ -235,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         promptAsync: handleLogin,
         logout,
         refreshAuth,
+        onTokensSaved,
       }}
     >
       {children}

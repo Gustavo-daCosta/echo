@@ -4,12 +4,35 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import { Accent, Neutral } from '@/constants/theme';
 import { ConcertCard } from '@/components/ConcertCard';
 import { useLocation, useConcerts } from '@/hooks/useData';
 import styles from '@/styles/radar';
+
+async function sendDemoNotification() {
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') {
+    const { status: newStatus } = await Notifications.requestPermissionsAsync();
+    if (newStatus !== 'granted') return;
+  }
+
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Concert Nearby!',
+      body: 'Harry Styles is playing at Allianz Parque (5.4 km away) this Saturday.',
+      sound: true,
+      ...(Platform.OS === 'android' && {
+        color: Accent.primary,
+        vibrate: [0, 200, 100, 200],
+      }),
+    },
+    trigger: null,
+  });
+}
 
 export default function LiveRadarScreen() {
   const { location, permission, loading: locLoading, request: requestLoc } = useLocation();
@@ -85,6 +108,15 @@ export default function LiveRadarScreen() {
           ))}
         </View>
       )}
+
+      <TouchableOpacity
+        style={styles.demoBtn}
+        onPress={sendDemoNotification}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="notifications-outline" size={16} color={Accent.primary} />
+        <Text style={styles.demoBtnText}>Test concert notification</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }

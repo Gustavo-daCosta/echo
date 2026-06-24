@@ -7,15 +7,12 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    # Ticketmaster
     ticketmaster_api_key: str = ""
 
-    # Server
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False
 
-    # Concert search defaults
     default_radius_km: int = 30
     max_radius_km: int = 500
     max_artists: int = 50

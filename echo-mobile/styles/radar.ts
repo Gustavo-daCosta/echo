@@ -117,4 +117,20 @@ export default StyleSheet.create({
     color: Neutral.textSecondary,
     marginBottom: Spacing.xs,
   },
+  demoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: Spacing.xl,
+    paddingVertical: 14,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Accent.primaryBg,
+    borderStyle: 'dashed',
+  },
+  demoBtnText: {
+    ...Typography.bodyBold,
+    color: Accent.primary,
+  },
 });
