@@ -1,9 +1,23 @@
 # Enviroment variables related files
 .env
+.env.local
+.env.*.local
 
-# Javascript/Typescript related files and folders
+# Expo
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
 
+# Javascript/Typescript
+node_modules/
+dist/
 
-# Python enviroment related files and folders
+# Python
 .venv/
-
+__pycache__/
+*.pyc

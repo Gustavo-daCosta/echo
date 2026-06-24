@@ -1,98 +1,130 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { View, Text, ScrollView, Image } from 'react-native';
+import { NowPlayingCard } from '@/components/NowPlayingCard';
+import { TrackItem } from '@/components/TrackItem';
+import {
+  useSpotifyUser,
+  useNowPlaying,
+  useLocalHistory,
+  useInsights,
+} from '@/hooks/useData';
+import { useEffect, useCallback } from 'react';
+import * as SpotifyService from '@/services/spotify';
+import * as Database from '@/services/database';
+import styles from '@/styles/home';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { user } = useSpotifyUser();
+  const { np, loading: npLoading } = useNowPlaying();
+  const { tracks: recentTracks, refresh: refreshHistory } = useLocalHistory(3);
+  const { topArtist, mostActiveDay, loading: insightsLoading, refresh: refreshInsights } = useInsights();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const syncHistory = useCallback(async () => {
+    try {
+      const recent = await SpotifyService.getRecentlyPlayed(20);
+      const cached = recent.items.map((item) => ({
+        id: item.track.id,
+        name: item.track.name,
+        artist: item.track.artists.map((a) => a.name).join(', '),
+        album: item.track.album.name,
+        albumArt: item.track.album.images[0]?.url ?? '',
+        playedAt: item.played_at,
+        durationMs: item.track.duration_ms,
+      }));
+      if (cached.length > 0) {
+        await Database.saveTracks(cached);
+        const today = new Date().toISOString().split('T')[0];
+        const uniqueArtists = new Set(cached.map((t) => t.artist)).size;
+        const uniqueTracks = new Set(cached.map((t) => t.id)).size;
+        const totalMs = cached.reduce((s, t) => s + t.durationMs, 0);
+        await Database.updateDailyStats(today, cached.length, totalMs, uniqueArtists, uniqueTracks);
+        refreshHistory();
+        refreshInsights();
+      }
+    } catch (e) {
+      console.log('[Home] Sync error:', e);
+    }
+  }, [refreshHistory, refreshInsights]);
+
+  useEffect(() => {
+    syncHistory();
+  }, [syncHistory]);
+
+  const profilePic = user?.images?.[0]?.url;
+
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.greeting}>
+        <View>
+          <Text style={styles.greetingText}>Good {getTimeOfDay()},</Text>
+          <Text style={styles.userName}>{user?.display_name ?? 'Listener'}</Text>
+        </View>
+        {profilePic ? (
+          <Image source={{ uri: profilePic }} style={styles.avatar} />
+        ) : null}
+      </View>
+
+      <View style={styles.section}>
+        <NowPlayingCard data={np} loading={npLoading} />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Daily Quick Insight</Text>
+        <View style={styles.insightCard}>
+          {topArtist ? (
+            <>
+              <Text style={styles.insightIcon}>🎧</Text>
+              <Text style={styles.insightText}>
+                Your top artist right now is{' '}
+                <Text style={styles.insightBold}>{topArtist}</Text>
+              </Text>
+              {mostActiveDay && (
+                <Text style={styles.insightSub}>
+                  Your most active listening day was{' '}
+                  {new Date(mostActiveDay).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </Text>
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={styles.insightIcon}>🎵</Text>
+              <Text style={styles.insightText}>
+                Start listening on Spotify to unlock personalized insights!
+              </Text>
+            </>
+          )}
+        </View>
+      </View>
+
+      {/* Recent Tracks */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Recently Played</Text>
+        <View style={styles.recentList}>
+          {recentTracks.length > 0 ? (
+            recentTracks.map((track, i) => (
+              <TrackItem key={track.playedAt + track.id} track={track} />
+            ))
+          ) : (
+            <Text style={styles.emptyText}>
+              No recent tracks yet — start playing on Spotify!
+            </Text>
+          )}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
+function getTimeOfDay(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Morning';
+  if (hour < 17) return 'Afternoon';
+  return 'Evening';
+}
